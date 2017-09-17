@@ -50,7 +50,7 @@ class Affect_LM_Model():
                 cell_output, current_state = cell(input_tensor, current_state)
                 feature = feature * self.beta
                 feature_output = tf.nn.relu(core.dense(feature, 100))
-                feature_output = tf.nn.relu(core.dense(feature, 200))
+                feature_output = tf.nn.relu(core.dense(feature_output, 200))
                 output = tf.concat([cell_output, feature_output], axis=1)
                 output = core.dense(output, vocab_size)
                 return output, current_state
@@ -72,6 +72,11 @@ class Affect_LM_Model():
             cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.ground_truth, logits=logits)
             self.loss = tf.reduce_sum(cross_entropy * self.target_weight) / tf.cast(batch_tensor, tf.float32)
             self.perplexity = tf.exp(tf.reduce_sum(cross_entropy * self.target_weight) / tf.reduce_sum(self.target_weight))
+            params = scope.trainable_variables()
+            gradients = tf.gradients(self.loss, params)
+            gradients, _ = tf.clip_by_global_norm(gradients, max_gradient_norm)
+            optimizer = tf.train.AdamOptimizer(learning_rate)
+            self.train = optimizer.apply_gradients(zip(gradients, params))
 
             # TODO: not elegant. can be replaced with tf.while_loop
             prefix_embedding = tf.nn.embedding_lookup(embedding, self.prefix)
