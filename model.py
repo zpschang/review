@@ -3,8 +3,12 @@ from tensorflow.contrib import seq2seq
 from tensorflow.contrib import rnn
 from tensorflow.python.layers import core
 from tensorflow.python.ops import math_ops
+import numpy as np
 
 GO_ID = 0
+EOS_ID = 1
+UNK_ID = 2
+PAD_ID = 3
 
 class Affect_LM_Model():
     def __init__(self,
@@ -28,10 +32,10 @@ class Affect_LM_Model():
             self.target_weight = tf.placeholder(tf.float32, [None, max_length], "target_weight")
             self.feature = tf.placeholder(tf.float32, [None, max_length, feature_size], "feature") # for training
             self.fixed_feature = tf.placeholder(tf.float32, [None, feature_size], "fixed_feature") # for inferring
-            self.prefix = tf.placeholder(tf.int32, [None, None], "prefix")
+            self.prefix = tf.placeholder(tf.int32, [None, None], "prefix") # for inferring
             self.beta = tf.placeholder(tf.float32, [], "beta")
 
-            batch_tensor = tf.shape(self.ground_truth)[0]
+            batch_tensor = tf.shape(self.target_weight)[0]
 
             self.input = tf.concat([tf.ones([batch_size, 1], dtype=tf.int32) * GO_ID, self.ground_truth[:, :-1]],
                                            axis=1)
@@ -68,7 +72,7 @@ class Affect_LM_Model():
                     outputs_train.append(tf.reshape(output, [batch_tensor, 1, vocab_size]))
 
             logits = tf.concat(outputs_train, axis=1, name="final_output")
-            self.output = tf.argmax(logits, 2, name="output")
+            self.result = tf.argmax(logits, 2, name="output")
             cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.ground_truth, logits=logits)
             self.loss = tf.reduce_sum(cross_entropy * self.target_weight) / tf.cast(batch_tensor, tf.float32)
             self.perplexity = tf.exp(tf.reduce_sum(cross_entropy * self.target_weight) / tf.reduce_sum(self.target_weight))
@@ -93,8 +97,9 @@ class Affect_LM_Model():
                     output_voc = tf.argmax(output, axis=1)
                     input_tensor = tf.nn.embedding_lookup(embedding, output_voc)
                     outputs_infer.append(tf.reshape(output_voc, [batch_tensor, 1]))
-            self.output_infer = tf.concat(outputs_infer, axis=1, name="output_infer")
+            self.result_infer = tf.concat(outputs_infer, axis=1, name="output_infer")
 
+            # TODO: one-step inference
 
 
 
@@ -111,11 +116,50 @@ class Affect_LM_Model():
                 total += k
             print 'total:', total
 
-    def update(self):
-        pass
+    def process_batch(self, batch):
+        feed_truth = []
+        feed_weight = []
+        feed_feature = []
+        feature_size = len(reader.catagory)
+        for comment, catagory, point in batch:
+            pad_num = self.max_length - len(comment)
+            weight = [1.0] * len(comment) + [0.0] * pad_num
+            catagory = catagory + [[0] * feature_size for _ in range(pad_num)]
+            comment = comment + [PAD_ID] * pad_num
+            feed_truth.append(comment)
+            feed_weight.append(weight)
+            feed_feature.append(catagory)
+        return feed_truth, feed_weight, feed_feature
+
+    def update(self, sess, beta, reader):
+        batch = reader.get_batch(self.batch_size)
+        # build feed dict
+        feed_truth, feed_weight, feed_feature = self.process_batch(batch)
+        feed_dict = {}
+        feed_dict[self.ground_truth] = feed_truth
+        feed_dict[self.target_weight] = feed_weight
+        feed_dict[self.feature] = feed_feature
+        feed_dict[self.beta] = beta
+
+        feed_output = [self.result, self.loss, self.perplexity, self.train]
+        result, loss, perplexity, _ = sess.run(feed_output, feed_dict=feed_dict)
+        print perplexity
+        reader.output(result, batch)
     
-    def inference(self):
-        pass
+    def inference(self, sess, beta, prefix_size, fixed_feature, reader):
+        batch = reader.get_batch(self.batch_size, prefix_size)
+
+        feed_prefix, feed_weight, feed_feature = self.process_batch(batch)
+
+        feed_dict = {}
+        feed_dict[self.prefix] = feed_prefix
+        feed_dict[self.target_weight] = feed_weight
+        feed_dict[self.fixed_feature] = fixed_feature
+        feed_dict[self.beta] = beta
+
+        result_infer = sess.run([self.result_infer], feed_dict=feed_dict)
+        result_prefix = [tmp[0] for tmp in batch]
+        reader.output([prefix + infer for prefix, infer in zip(result_prefix, result_infer)])
 
 if __name__ == "__main__":
     model = Affect_LM_Model(30000)

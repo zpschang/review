@@ -62,7 +62,7 @@ for obj in obj_movies:
             obj_output.append(dict_output)
 
         print 'comment num:', num
-        time.sleep(1)
+        time.sleep(0.1)
     file_comment = open('dataset/douban/comments/' + movie_id + '.json', 'w')
     file_comment.write(json.dumps(obj_output))
     file_comment.close()
