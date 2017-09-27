@@ -13,11 +13,11 @@ PAD_ID = 3
 class Affect_LM_Model():
     def __init__(self,
                 vocab_size,
+                feature_size,
                 embedding_size = 128,
                 lstm_size = 200,
                 num_layer = 4,
-                max_length = 40,
-                feature_size = 6,
+                max_length = 100,
                 max_gradient_norm = 2,
                 batch_size = 20,
                 learning_rate = 0.25,
@@ -116,7 +116,7 @@ class Affect_LM_Model():
                 total += k
             print 'total:', total
 
-    def process_batch(self, batch):
+    def process_batch(self, batch, reader):
         feed_truth = []
         feed_weight = []
         feed_feature = []
@@ -124,8 +124,9 @@ class Affect_LM_Model():
         for comment, catagory, point in batch:
             pad_num = self.max_length - len(comment)
             weight = [1.0] * len(comment) + [0.0] * pad_num
-            catagory = catagory + [[0] * feature_size for _ in range(pad_num)]
+            catagory = catagory + [[0.0] * feature_size for _ in range(pad_num)]
             comment = comment + [PAD_ID] * pad_num
+            print 'original', len(comment)
             feed_truth.append(comment)
             feed_weight.append(weight)
             feed_feature.append(catagory)
@@ -133,13 +134,21 @@ class Affect_LM_Model():
 
     def update(self, sess, beta, reader):
         batch = reader.get_batch(self.batch_size)
+        if batch == None:
+            reader.reset()
+        print 'read finished'
+        reader.output(None, batch)
         # build feed dict
-        feed_truth, feed_weight, feed_feature = self.process_batch(batch)
+        feed_truth, feed_weight, feed_feature = self.process_batch(batch, reader)
         feed_dict = {}
-        feed_dict[self.ground_truth] = feed_truth
-        feed_dict[self.target_weight] = feed_weight
-        feed_dict[self.feature] = feed_feature
+        for seq in feed_truth:
+            print len(seq)
+        feed_dict[self.ground_truth] = np.array(feed_truth, dtype=np.int32)
+        feed_dict[self.target_weight] = np.array(feed_weight, dtype=np.float32)
+        feed_dict[self.feature] = np.array(feed_feature, dtype=np.float32)
         feed_dict[self.beta] = beta
+
+        print feed_truth
 
         feed_output = [self.result, self.loss, self.perplexity, self.train]
         result, loss, perplexity, _ = sess.run(feed_output, feed_dict=feed_dict)
@@ -149,7 +158,7 @@ class Affect_LM_Model():
     def inference(self, sess, beta, prefix_size, fixed_feature, reader):
         batch = reader.get_batch(self.batch_size, prefix_size)
 
-        feed_prefix, feed_weight, feed_feature = self.process_batch(batch)
+        feed_prefix, feed_weight, feed_feature = self.process_batch(batch, reader)
 
         feed_dict = {}
         feed_dict[self.prefix] = feed_prefix

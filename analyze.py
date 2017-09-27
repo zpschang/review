@@ -21,24 +21,34 @@ def load_dataset():
 
 def load_catagory():
     f = open('dataset/sc_liwc.dic', 'r')
-    catagory = {}
+    catagory = []
+    catagory_to_index = {}
     word_to_catagory = {}
     f.readline()
+    num = 0
     while True:
-        line = f.readline()
+        line = f.readline().decode('utf-8')
         if line[0] == '%':
             break
         str_num, str_cata = re.split('[ \t]', line)
-        catagory[int(str_num)] = str_cata[:-2]
+        catagory.append(str_cata[:-2])
+        catagory_to_index[int(str_num)] = num
+        num += 1
     while True:
-        line = f.readline()
+        line = f.readline().decode('utf-8')
         if line == '':
             break
         tmp = re.split('[ \t]', line)
         word = tmp[0]
         if(word[-1] == '*'):
             word = word[:-1]
+
         word_to_catagory[word] = [string.atoi(str_num) for str_num in tmp[1:]]
+
+    # word_to_catagory = {key: catagory_to_index[word_to_catagory[key]] for key in word_to_catagory}
+    for word in word_to_catagory:
+        index = [catagory_to_index[item] for item in word_to_catagory[word]]
+        word_to_catagory[word] = index
 
     return catagory, word_to_catagory
 

@@ -37,9 +37,9 @@ if __name__ == '__main__':
     validate_sum = 0
     file_word = open('dataset/words.txt', 'wb')
     file_word.write('<go>\n<eos>\n<unk>\n<pad>\n')
-    for key, value in sorted(words.items(), key=lambda x: x[1]):
+    for key, value in sorted(words.items(), key=lambda x: x[1], reverse=True):
         if key == ' ':
-            break
+            continue
         total_sum += value
         if value < 5:
             continue
