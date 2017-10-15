@@ -12,27 +12,36 @@ class reader_amazon:
     def get_batch(self, batch_size):
         pass
 
+# read douban movie review and generate mini-batch
 class Reader:
-    def __init__(self, review_filename, word_filename):
+    def __init__(self, word_filename):
         self.words = []
         self.word_to_index = {}
         for word in open(word_filename, 'rb').readlines():
             word = word.decode('utf-8')[:-1]
             self.word_to_index[word] = len(self.words)
             self.words.append(word)
-        string = open(review_filename, 'rb').read()
-        self.object = json.loads(string)
-        self.index = 0
+        self.object = {}
+        self.index = {}
         self.catagory, self.word_to_catagory = load_catagory()
         print self.catagory
 
-    def get_batch(self, batch_size, prefix_size=None):
-        if self.index + batch_size > len(self.object):
-            return None
-        object = self.object[self.index : self.index + batch_size]
-        batch = []
+    def filter(self, comment): # whether this comment is selected
+        # TODO: filter
+        return True
 
-        # TODO: filter out over-length comment
+    def get_batch(self, batch_size, prefix_size=None):
+        batch = []
+        object = []
+        if self.review_filename not in self.index:
+            self.index[self.review_filename] = 0
+        object_review = self.object[self.review_filename]
+        while len(object) < batch_size:
+            str_comment = object_review[self.index[self.review_filename]]
+            if self.filter(str_comment):
+                object.append(object_review[self.index[self.review_filename]])
+            self.index[self.review_filename] += 1
+            self.index[self.review_filename] %= len(object_review)
 
         for comment in object:
             str_comment = comment['comment_str']
@@ -49,7 +58,6 @@ class Reader:
                 int_comment = int_comment[:prefix_size]
             catagory = self.get_catagory(int_comment)
             batch.append((int_comment, catagory, point))
-        self.index += batch_size
         return batch
 
     def get_catagory(self, comment):
@@ -72,26 +80,26 @@ class Reader:
         return catagory_batch
 
     def output(self, result, batch=None):
-        length = len(result) if result != None else len(batch)
+        length = len(result) if result is not None else len(batch)
         for index in range(length):
             def output(comment):
                 for word in comment:
-                    print self.words[word],
+                    print self.words[word].encode('utf-8'),
                     if word == EOS_ID:
                         break
                 print '\n',
-            if batch != None:
+            if batch is not None:
                 print 'truth:'
                 output(batch[index][0])
-            if result != None:
+            if result is not None:
                 print 'result:'
                 output(result[index])
 
-    def set_review(self, review_filename):
-        string = open(review_filename, 'rb').read()
-        self.object = json.loads(string)
-        self.index = 0
-        self.catagory, self.word_to_catagory = load_catagory()
-
     def reset(self):
-        self.index = 0
+        self.index[self.review_filename] = 0
+
+    def set_review(self, review_filename):
+        self.review_filename = review_filename
+        string = open(review_filename, 'rb').read()
+        if review_filename not in self.object:
+            self.object[review_filename] = json.loads(string)

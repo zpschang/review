@@ -1,9 +1,8 @@
 import jieba
 import json
 
-# word segmentation
-# vocabulary generation
-# filter out low quality comments
+# word segmentation & vocabulary generation
+# run this program before training to generate vocabulary
 
 def get_all_words():
     words = {}

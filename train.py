@@ -4,7 +4,14 @@ import tensorflow as tf
 import json
 word_filename = 'dataset/words.txt'
 
-reader = Reader('dataset/douban/comments/1578714.json', word_filename)
+import os
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"]="3"
+
+from tensorflow.python.client import device_lib
+print device_lib.list_local_devices()
+
+reader = Reader(word_filename)
 batch_size = 40
 
 print '=========initialize model========='
@@ -21,23 +28,23 @@ except:
     sess.run(tf.global_variables_initializer())
     print 'load failed'
 
-
-string = open('dataset/douban/movie_list.json', 'r').read()
-
 # TODO : training in different movies
-"""
-for obj in json.loads(string):
-    movie_id = obj['id']
-    movie_url = obj['url']
-    filename = 'dataset/douban/comments/' + movie_id + '.json'
-"""
 
 print '=========start training========='
 
 try:
-    for _ in range(100):
-        model.update(sess, 1.0, reader)
-    saver.save(sess, 'model/affect-lm.ckpt')
+    for iteration in range(1000):
+        string = open('dataset/douban/movie_list.json', 'r').read()
+        for obj in json.loads(string):
+            movie_id = obj['id']
+            filename = 'dataset/douban/comments/' + movie_id + '.json'
+            try:
+                reader.set_review(filename)
+                print 'iteration:', iteration, 'movie:', movie_id
+                model.update(sess, 1.0, reader)
+            except IOError:
+                pass
+        saver.save(sess, 'model/affect-lm.ckpt')
 
 except KeyboardInterrupt:
     saver.save(sess, 'model/affect-lm.ckpt')

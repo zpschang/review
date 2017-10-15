@@ -2,23 +2,7 @@ import json
 import re
 import string
 
-def load_dataset():
-    # f = open('dataset/reviews_Movies_and_TV_5.json', 'r')
-    f = open('dataset/review.json', 'r')
-    stat = {}
-
-    #for line in f.readlines():
-    for i in range(100):
-        line = f.readline()
-        d = json.loads(line)
-        print d
-        if d['business_id'] not in stat:
-            stat[d['business_id']] = {'num': 1}
-        else:
-            stat[d['business_id']]['num'] += 1
-    result = sorted(stat.items(), key=lambda x : x[1]['num'])
-    print result
-
+# load catagory dictionary for the use of Affect-LM
 def load_catagory():
     f = open('dataset/sc_liwc.dic', 'r')
     catagory = []
@@ -53,5 +37,20 @@ def load_catagory():
     return catagory, word_to_catagory
 
 
-if __name__ == '__main__':
-    load_catagory()
+# loading yelp dataset. temporarily unused
+def load_dataset():
+    # f = open('dataset/reviews_Movies_and_TV_5.json', 'r')
+    f = open('dataset/review.json', 'r')
+    stat = {}
+
+    #for line in f.readlines():
+    for i in range(100):
+        line = f.readline()
+        d = json.loads(line)
+        print d
+        if d['business_id'] not in stat:
+            stat[d['business_id']] = {'num': 1}
+        else:
+            stat[d['business_id']]['num'] += 1
+    result = sorted(stat.items(), key=lambda x : x[1]['num'])
+    print result

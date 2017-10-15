@@ -5,6 +5,8 @@ from tensorflow.python.layers import core
 from tensorflow.python.ops import math_ops
 import numpy as np
 
+# Affect-LM model
+
 GO_ID = 0
 EOS_ID = 1
 UNK_ID = 2
@@ -20,7 +22,7 @@ class Affect_LM_Model():
                 max_length = 100,
                 max_gradient_norm = 2,
                 batch_size = 20,
-                learning_rate = 0.25,
+                learning_rate = 0.001,
                 beam_width = 5,
 
                 embed=None):
@@ -82,7 +84,7 @@ class Affect_LM_Model():
             optimizer = tf.train.AdamOptimizer(learning_rate)
             self.train = optimizer.apply_gradients(zip(gradients, params))
 
-            # TODO: not elegant. can be replaced with tf.while_loop
+            # TODO: can be replaced with tf.while_loop
             prefix_embedding = tf.nn.embedding_lookup(embedding, self.prefix)
             _, current_state = tf.nn.dynamic_rnn(cell, prefix_embedding, dtype=tf.float32)
             outputs_infer = []
@@ -126,7 +128,6 @@ class Affect_LM_Model():
             weight = [1.0] * len(comment) + [0.0] * pad_num
             catagory = catagory + [[0.0] * feature_size for _ in range(pad_num)]
             comment = comment + [PAD_ID] * pad_num
-            print 'original', len(comment)
             feed_truth.append(comment)
             feed_weight.append(weight)
             feed_feature.append(catagory)
@@ -136,24 +137,23 @@ class Affect_LM_Model():
         batch = reader.get_batch(self.batch_size)
         if batch == None:
             reader.reset()
+            batch = reader.get_batch(self.batch_size)
         print 'read finished'
-        reader.output(None, batch)
         # build feed dict
         feed_truth, feed_weight, feed_feature = self.process_batch(batch, reader)
         feed_dict = {}
-        for seq in feed_truth:
-            print len(seq)
+
         feed_dict[self.ground_truth] = np.array(feed_truth, dtype=np.int32)
         feed_dict[self.target_weight] = np.array(feed_weight, dtype=np.float32)
         feed_dict[self.feature] = np.array(feed_feature, dtype=np.float32)
         feed_dict[self.beta] = beta
 
-        print feed_truth
-
         feed_output = [self.result, self.loss, self.perplexity, self.train]
         result, loss, perplexity, _ = sess.run(feed_output, feed_dict=feed_dict)
-        print perplexity
+
         reader.output(result, batch)
+        print 'finish one iteration'
+        print 'perplexity = ' + str(perplexity)
     
     def inference(self, sess, beta, prefix_size, fixed_feature, reader):
         batch = reader.get_batch(self.batch_size, prefix_size)
