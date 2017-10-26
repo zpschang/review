@@ -1,5 +1,5 @@
-from reader import Reader
-from model import Affect_LM_Model
+from reader import Reader, Simple_reader
+from model_aspect import Aspect_LM_Model
 import tensorflow as tf
 import json
 import os
@@ -26,17 +26,17 @@ def main():
     print device_lib.list_local_devices()
 
     word_filename = 'dataset/words.txt'
-    reader = Reader(word_filename)
-    batch_size = 40
+    review_filename = 'dataset/aspect_result.txt'
+    reader = Simple_reader(word_filename, review_filename)
 
     print '=========initialize model========='
-    model = Affect_LM_Model(vocab_size=len(reader.words), feature_size=len(reader.category)+5)
+    model = Aspect_LM_Model(vocab_size=len(reader.words))
 
     print '=========load environment========='
     sess = tf.Session()
     saver = tf.train.Saver(tf.global_variables(), keep_checkpoint_every_n_hours=1.0)
     try:
-        loader = tf.train.import_meta_graph(model_dir + '/affect-lm.ckpt.meta')
+        loader = tf.train.import_meta_graph(model_dir + '/aspect-lm.ckpt.meta')
         loader.restore(sess, tf.train.latest_checkpoint(model_dir + '/'))
         print 'load finished'
     except:
@@ -48,19 +48,10 @@ def main():
     print data_to_plot
 
     try:
-        for iteration in range(1000):
-            string = open('dataset/douban/movie_list.json', 'r').read()
-            for obj in json.loads(string):
-                movie_id = obj['id']
-                filename = 'dataset/douban/comments/' + movie_id + '.json'
-                try:
-                    reader.set_review(filename)
-                    print 'iteration:', iteration, 'movie:', movie_id
-                    if len(reader.object[filename]) > 0:
-                        perplexity = model.update(sess, 1.0, reader)
-                        data_to_plot[model_dir].append(perplexity)
-                except IOError:
-                    pass
+        for iteration in range(100000):
+            perplexity = model.update(sess, reader)
+            print 'progress:', iteration * model.batch_size, '/', 620840
+            data_to_plot[model_dir].append(perplexity)
             file_plot = open('plot.obj', 'wb')
             pickle.dump(data_to_plot, file_plot)
             file_plot.close()

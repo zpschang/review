@@ -12,11 +12,12 @@ EOS_ID = 1
 UNK_ID = 2
 PAD_ID = 3
 
-class Affect_LM_Model():
+class Aspect_LM_Model():
     def __init__(self,
                 vocab_size,
-                feature_size,
                 embedding_size = 128,
+                rating_num = 6,
+                aspect_num = 6,
                 lstm_size = 200,
                 num_layer = 4,
                 max_length = 30,
@@ -27,24 +28,38 @@ class Affect_LM_Model():
                 beam_width = 5,
 
                 embed=None):
+        print 'building model'
+
         self.batch_size = batch_size
         self.max_length = max_length
 
-        with tf.variable_scope("Affect-LM") as scope:
+        rating_embedsize = 100
+        aspect_embedsize = 100
+
+        with tf.variable_scope("Aspect-LM") as scope:
             self.ground_truth = tf.placeholder(tf.int32, [None, max_length], "ground_truth")
             self.target_weight = tf.placeholder(tf.float32, [None, max_length], "target_weight")
-            self.feature = tf.placeholder(tf.float32, [None, max_length, feature_size], "feature") # for training
-            self.fixed_feature = tf.placeholder(tf.float32, [None, feature_size], "fixed_feature") # for inferring
+
             self.prefix = tf.placeholder(tf.int32, [None, None], "prefix") # for inferring
-            self.beta = tf.placeholder(tf.float32, [], "beta")
+            self.aspect = tf.placeholder(tf.int32, [None], "aspect")
+            self.rating = tf.placeholder(tf.int32, [None], "rating")
+            # self.beta = tf.placeholder(tf.float32, [], "beta")
+            no_rating = tf.cast(tf.equal(self.rating, -1), tf.int32)
 
             batch_tensor = tf.shape(self.target_weight)[0]
+            prefix_tensor = tf.shape(self.prefix)[1]
 
             self.input = tf.concat([tf.ones([batch_size, 1], dtype=tf.int32) * GO_ID, self.ground_truth[:, :-1]],
                                            axis=1)
 
             embedding = tf.get_variable("embedding", [vocab_size, embedding_size], dtype=tf.float32)
-            input_embedding = tf.nn.embedding_lookup(embedding, self.input)
+            input_embedded = tf.nn.embedding_lookup(embedding, self.input)
+
+            rating_embedding = tf.get_variable('rating_embedding', [rating_num, rating_embedsize], dtype=tf.float32)
+            rating_embedded = tf.nn.embedding_lookup(rating_embedding, self.rating+no_rating)
+
+            aspect_embedding = tf.get_variable('aspect_embedding', [aspect_num, aspect_embedsize], dtype=tf.float32)
+            aspect_embedded = tf.nn.embedding_lookup(aspect_embedding, self.aspect+2)
 
             def single_cell():
                 return rnn.BasicLSTMCell(lstm_size)
@@ -53,28 +68,15 @@ class Affect_LM_Model():
             cell = multi_cell()
             current_state = cell.zero_state(batch_tensor, tf.float32)
 
-            def cell_model(cell, input_tensor, current_state, feature):
-                cell_output, current_state = cell(input_tensor, current_state)
-
-                if not is_pure_LM:
-                    feature = feature * self.beta
-                    feature_output = tf.nn.relu(core.dense(feature, 100))
-                    feature_output = tf.nn.relu(core.dense(feature_output, 200))
-                    output = tf.concat([cell_output, feature_output], axis=1)
-                    output = core.dense(output, vocab_size)
-                else:
-                    output = core.dense(cell_output, vocab_size)
-                return output, current_state
-
             outputs_train = []
             for time_step in range(max_length):
                 with tf.variable_scope('cell_model') as cell_scope:
                     if time_step > 0:
                         cell_scope.reuse_variables()
-                    print 'time step:', time_step
-                    input_tensor = input_embedding[:, time_step, :]
-                    feature = self.feature[:, time_step, :]
-                    output, current_state = cell_model(cell, input_tensor, current_state, feature)
+                    input_tensor = input_embedded[:, time_step, :]
+                    input_tensor = tf.concat([input_tensor, rating_embedded, aspect_embedded], axis=1)
+                    output, current_state = cell(input_tensor, current_state)
+                    output = core.dense(output, vocab_size)
                     # TODO: copy output if <eos> occurs
                     outputs_train.append(tf.reshape(output, [batch_tensor, 1, vocab_size]))
 
@@ -91,15 +93,19 @@ class Affect_LM_Model():
 
             # TODO: can be replaced with tf.while_loop
             prefix_embedding = tf.nn.embedding_lookup(embedding, self.prefix)
+            rating_embedded_copy = tf.reshape(rating_embedded, [batch_tensor, 1, rating_embedsize]) * tf.ones([batch_tensor, prefix_tensor, rating_embedsize])
+            aspect_embedded_copy = tf.reshape(aspect_embedded, [batch_tensor, 1, aspect_embedsize]) * tf.ones([batch_tensor, prefix_tensor, aspect_embedsize])
+            prefix_embedding = tf.concat([prefix_embedding, rating_embedded_copy, aspect_embedded_copy], axis=2)
+
             _, current_state = tf.nn.dynamic_rnn(cell, prefix_embedding, dtype=tf.float32)
             outputs_infer = []
 
             input_tensor = tf.nn.embedding_lookup(embedding, self.prefix[:, -1])
             for time_step in range(max_length):
                 with tf.variable_scope('cell_model', reuse=True) as cell_scope:
-                    print 'time step:', time_step
-                    feature = self.fixed_feature
-                    output, current_state = cell_model(cell, input_tensor, current_state, feature)
+                    input_tensor = tf.concat([input_tensor, rating_embedded, aspect_embedded], axis=1)
+                    output, current_state = cell(input_tensor, current_state)
+                    output = core.dense(output, vocab_size)
                     output = output * (1 - tf.one_hot(2, vocab_size))
                     output_voc = tf.argmax(output, axis=1)
                     input_tensor = tf.nn.embedding_lookup(embedding, output_voc)
@@ -107,11 +113,10 @@ class Affect_LM_Model():
             self.result_infer = tf.concat(outputs_infer, axis=1, name="output_infer")
 
             # TODO: one-step inference
-
-
+        print 'build finished'
 
     def all_params(self):
-        with tf.variable_scope('Affect-LM') as scope:
+        with tf.variable_scope('Aspect-LM') as scope:
             total = 0
             for var in scope.trainable_variables():
                 shape = var.get_shape()
@@ -126,24 +131,18 @@ class Affect_LM_Model():
     def process_batch(self, batch, reader):
         feed_truth = []
         feed_weight = []
-        feed_feature = []
-        feature_size = len(reader.category)
-        for comment, category, point in batch:
+        feed_rating = []
+        feed_aspect = []
+
+        for comment, rating, aspect in batch:
+            feed_rating.append(rating)
+            feed_aspect.append(aspect)
             pad_num = self.max_length - len(comment)
             weight = [1.0] * len(comment) + [0.0] * pad_num
             for index in range(len(comment)):
                 if comment[index] == UNK_ID:
                     weight[index] = 0
 
-            category = category + [[0.0] * feature_size for _ in range(pad_num)]
-
-            # add point
-            point_vector = [1 if pt == point else 0 for pt in range(5)]
-            for index in range(len(category)):
-                if type(category[index]) is np.ndarray:
-                    category[index] = category[index].tolist() + point_vector
-                else:
-                    category[index] = category[index] + point_vector
             comment = comment + [PAD_ID] * pad_num
             if len(comment) > self.max_length:
                 weight = weight[:self.max_length]
@@ -151,23 +150,23 @@ class Affect_LM_Model():
                 comment = comment[:self.max_length]
             feed_truth.append(comment)
             feed_weight.append(weight)
-            feed_feature.append(category)
-        return feed_truth, feed_weight, feed_feature
+        return feed_truth, feed_weight, feed_rating, feed_aspect
 
-    def update(self, sess, beta, reader):
+    def update(self, sess, reader):
         batch = reader.get_batch(self.batch_size)
         if batch == None:
+            print 'batch is None!!!'
             reader.reset()
             batch = reader.get_batch(self.batch_size)
         print 'read finished'
         # build feed dict
-        feed_truth, feed_weight, feed_feature = self.process_batch(batch, reader)
+        feed_truth, feed_weight, feed_rating, feed_aspect = self.process_batch(batch, reader)
         feed_dict = {}
 
         feed_dict[self.ground_truth] = np.array(feed_truth, dtype=np.int32)
         feed_dict[self.target_weight] = np.array(feed_weight, dtype=np.float32)
-        feed_dict[self.feature] = np.array(feed_feature, dtype=np.float32)
-        feed_dict[self.beta] = beta
+        feed_dict[self.rating] = feed_rating
+        feed_dict[self.aspect] = feed_aspect
 
         feed_output = [self.result, self.loss, self.perplexity, self.train]
         result, loss, perplexity, _ = sess.run(feed_output, feed_dict=feed_dict)
@@ -177,16 +176,15 @@ class Affect_LM_Model():
         print 'perplexity = ' + str(perplexity)
         return perplexity
     
-    def inference(self, sess, beta, prefix_size, fixed_feature, reader):
+    def inference(self, sess, prefix_size, reader):
         batch = reader.get_batch(self.batch_size, prefix_size)
 
-        feed_prefix, feed_weight, feed_feature = self.process_batch(batch, reader)
-
+        feed_prefix, feed_weight, feed_rating, feed_aspect = self.process_batch(batch, reader)
         feed_dict = {}
         feed_dict[self.prefix] = feed_prefix
         feed_dict[self.target_weight] = feed_weight
-        feed_dict[self.fixed_feature] = fixed_feature
-        feed_dict[self.beta] = beta
+        feed_dict[self.rating] = feed_rating
+        feed_dict[self.aspect] = feed_aspect
 
         result_infer = sess.run(self.result_infer, feed_dict=feed_dict)
         result_prefix = [tmp[0] for tmp in batch]
@@ -196,5 +194,5 @@ class Affect_LM_Model():
         return result_infer
 
 if __name__ == "__main__":
-    model = Affect_LM_Model(30000)
+    model = Aspect_LM_Model(30000)
     model.all_params()
