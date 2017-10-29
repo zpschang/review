@@ -1,0 +1,8 @@
+dataset/
+model*/
+graph/
+result/
+*.png
+*.sh
+*.pyc
+*.obj

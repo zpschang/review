@@ -138,42 +138,66 @@ class Simple_reader():
         self.object = {}
         self.index = {}
         self.review_filename = review_filename
-        self.reviews = open(review_filename, 'rb')
+        string = open(review_filename, 'rb').readlines()
+        self.reviews = []
+        self.rating = []
+        self.aspect = []
+
+        print 'start processing data'
+        for index in range(0, len(string), 2):
+            line_review = string[index]
+            line_score = string[index + 1]
+            words = re.split(' ', line_review)
+            if words[-1] == '\n':
+                words = words[:-1]
+            review_index = [self.word_to_index[word] if word in self.word_to_index else UNK_ID for word in words]
+            review_index += [EOS_ID]
+            pair = re.findall('-?[0-9]', line_score)
+
+            aspect = eval(pair[0])
+            rating = eval(pair[1])
+            self.reviews.append(review_index)
+            self.aspect.append(aspect)
+            self.rating.append(rating)
+
+        print 'finish processing data'
+        self.index = 0
     def get_batch(self, batch_size, prefix_size=None):
         batch = []
         for _ in range(batch_size):
-            line_review = self.reviews.readline()
-            if not line_review:
-                self.reviews.close()
-                self.reviews = open(self.review_filename, 'rb')
-                return self.get_batch(batch_size, prefix_size)
-            words = re.split(' ', line_review)
-            for word in words:
-                print word,
-            review_index = [self.word_to_index[word] if word in self.word_to_index else UNK_ID for word in words]
-            review_index += [EOS_ID]
-            line_score = self.reviews.readline()
-            pair = re.findall('-?[0-9]', line_score)
-            print pair[0], pair[1]
-            aspect = eval(pair[0])
-            rating = eval(pair[1])
-            batch.append((review_index, rating, aspect))
+            if self.index == len(self.reviews):
+                self.index = 0
+            if prefix_size is None:
+                reviews = self.reviews[self.index]
+            else:
+                reviews = self.reviews[self.index][:prefix_size]
+            rating = self.rating[self.index]
+            aspect = self.aspect[self.index]
+            batch.append((reviews, rating, aspect))
+
+            self.index += 1
 
         return batch
 
-    def output(self, result, batch=None):
+    def output(self, result, batch=None, file=None):
         length = len(result) if result is not None else len(batch)
+        string = ''
         for index in range(length):
-            def output(comment):
-                for word in comment:
-                    print self.words[word],
+            if batch is not None:
+                string = string + 'truth:\n'
+                for word in batch[index][0]:
+                    string = string + self.words[word] + ' '
                     if word == EOS_ID:
                         break
-                print '\n',
-
-            if batch is not None:
-                print 'truth:'
-                output(batch[index][0])
+                string += '\n'
             if result is not None:
-                print 'result:'
-                output(result[index])
+                string = string + 'result:\n'
+                for word in result[index]:
+                    string = string + self.words[word] + ' '
+                    if word == EOS_ID:
+                        break
+                string += '\n'
+        if file is None:
+            print string
+        else:
+            file.write(string)

@@ -20,11 +20,10 @@ class Aspect_LM_Model():
                 aspect_num = 6,
                 lstm_size = 200,
                 num_layer = 4,
-                max_length = 30,
+                max_length = 15,
                 max_gradient_norm = 2,
                 batch_size = 20,
                 learning_rate = 0.001,
-                is_pure_LM = False,
                 beam_width = 5,
 
                 embed=None):
@@ -98,6 +97,7 @@ class Aspect_LM_Model():
             prefix_embedding = tf.concat([prefix_embedding, rating_embedded_copy, aspect_embedded_copy], axis=2)
 
             _, current_state = tf.nn.dynamic_rnn(cell, prefix_embedding, dtype=tf.float32)
+            self.current_state = current_state
             outputs_infer = []
 
             input_tensor = tf.nn.embedding_lookup(embedding, self.prefix[:, -1])
@@ -106,7 +106,7 @@ class Aspect_LM_Model():
                     input_tensor = tf.concat([input_tensor, rating_embedded, aspect_embedded], axis=1)
                     output, current_state = cell(input_tensor, current_state)
                     output = core.dense(output, vocab_size)
-                    output = output * (1 - tf.one_hot(2, vocab_size))
+                    output = output - 10 * tf.one_hot(2, vocab_size)
                     output_voc = tf.argmax(output, axis=1)
                     input_tensor = tf.nn.embedding_lookup(embedding, output_voc)
                     outputs_infer.append(tf.reshape(output_voc, [batch_tensor, 1]))
@@ -146,10 +146,10 @@ class Aspect_LM_Model():
             comment = comment + [PAD_ID] * pad_num
             if len(comment) > self.max_length:
                 weight = weight[:self.max_length]
-                category = category[:self.max_length]
                 comment = comment[:self.max_length]
             feed_truth.append(comment)
             feed_weight.append(weight)
+
         return feed_truth, feed_weight, feed_rating, feed_aspect
 
     def update(self, sess, reader):
@@ -159,10 +159,10 @@ class Aspect_LM_Model():
             reader.reset()
             batch = reader.get_batch(self.batch_size)
         print 'read finished'
+
         # build feed dict
         feed_truth, feed_weight, feed_rating, feed_aspect = self.process_batch(batch, reader)
         feed_dict = {}
-
         feed_dict[self.ground_truth] = np.array(feed_truth, dtype=np.int32)
         feed_dict[self.target_weight] = np.array(feed_weight, dtype=np.float32)
         feed_dict[self.rating] = feed_rating
@@ -172,11 +172,10 @@ class Aspect_LM_Model():
         result, loss, perplexity, _ = sess.run(feed_output, feed_dict=feed_dict)
 
         reader.output(result, batch)
-        print 'finish one iteration'
         print 'perplexity = ' + str(perplexity)
         return perplexity
     
-    def inference(self, sess, prefix_size, reader):
+    def inference(self, sess, prefix_size, reader, file=None):
         batch = reader.get_batch(self.batch_size, prefix_size)
 
         feed_prefix, feed_weight, feed_rating, feed_aspect = self.process_batch(batch, reader)
@@ -187,9 +186,9 @@ class Aspect_LM_Model():
         feed_dict[self.aspect] = feed_aspect
 
         result_infer = sess.run(self.result_infer, feed_dict=feed_dict)
+
         result_prefix = [tmp[0] for tmp in batch]
-        print result_prefix, result_infer
-        reader.output([np.concatenate([prefix, infer]) for prefix, infer in zip(result_prefix, result_infer)])
+        reader.output(result=[np.concatenate([prefix, infer]) for prefix, infer in zip(result_prefix, result_infer)], file=file)
 
         return result_infer
 

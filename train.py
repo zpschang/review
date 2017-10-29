@@ -30,7 +30,7 @@ def main():
     batch_size = 40
 
     print '=========initialize model========='
-    model = Affect_LM_Model(vocab_size=len(reader.words), feature_size=len(reader.category)+5)
+    model = Affect_LM_Model(vocab_size=len(reader.words), feature_size=len(reader.category)+5, is_pure_LM=True)
 
     print '=========load environment========='
     sess = tf.Session()

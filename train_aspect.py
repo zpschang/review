@@ -12,6 +12,7 @@ model_dir = sys.argv[1]
 assert os.path.isdir(model_dir)
 
 def main():
+    batch_size = 20
     try:
         file_plot = open('plot.obj', 'rb')
         data_to_plot = pickle.load(file_plot)
@@ -26,11 +27,15 @@ def main():
     print device_lib.list_local_devices()
 
     word_filename = 'dataset/words.txt'
-    review_filename = 'dataset/aspect_result.txt'
+    review_filename = 'dataset/aspect_shuffle.txt'
+
     reader = Simple_reader(word_filename, review_filename)
 
+    test_filename = 'dataset/aspect_test.txt'
+    reader_test = Simple_reader(word_filename, test_filename)
+
     print '=========initialize model========='
-    model = Aspect_LM_Model(vocab_size=len(reader.words))
+    model = Aspect_LM_Model(vocab_size=len(reader.words), batch_size=batch_size)
 
     print '=========load environment========='
     sess = tf.Session()
@@ -48,21 +53,30 @@ def main():
     print data_to_plot
 
     try:
-        for iteration in range(100000):
+        for iteration in range(10000000):
             perplexity = model.update(sess, reader)
             print 'progress:', iteration * model.batch_size, '/', 620840
             data_to_plot[model_dir].append(perplexity)
-            file_plot = open('plot.obj', 'wb')
-            pickle.dump(data_to_plot, file_plot)
-            file_plot.close()
-            plot(data_to_plot)
+            if iteration % 10000 == 0:
+                saver.save(sess, model_dir + '/aspect-lm.ckpt')
+                plot(data_to_plot)
+                file = open('result/result_' + str(iteration) + '.txt', 'w')
+                model.batch_size = len(reader_test.reviews)
+                model.inference(sess, prefix_size=3, reader=reader_test, file=file)
+                file.close()
+                model.batch_size = batch_size
 
     except KeyboardInterrupt:
-        saver.save(sess, model_dir + '/affect-lm.ckpt')
+        saver.save(sess, model_dir + '/aspect-lm.ckpt')
         file_plot = open('plot.obj', 'wb')
         pickle.dump(data_to_plot, file_plot)
         file_plot.close()
         plot(data_to_plot)
+    saver.save(sess, model_dir + '/aspect-lm.ckpt')
+    file_plot = open('plot.obj', 'wb')
+    pickle.dump(data_to_plot, file_plot)
+    file_plot.close()
+    plot(data_to_plot)
 
 def plot(data_to_plot):
     plt.title('Perplexity Graph')
