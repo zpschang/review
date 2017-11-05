@@ -1,4 +1,4 @@
-.DS_Store
+*/.DS_Store
 dataset/
 model*/
 graph/
@@ -7,3 +7,4 @@ result*/
 *.sh
 *.pyc
 *.obj
+cookie.txt

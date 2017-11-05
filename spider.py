@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 import os
 import sys
 
-cookie = 'bid=L9HzO_vISEw; gr_user_id=df97a5fa-2d83-46dc-8fa2-349e8e8242cf; __yadk_uid=t7kiVznpnGbqfYRIGs2knRtOJAHymky6; viewed="1958285_1422882_26253943_25742296"; ll="108090"; _ga=GA1.2.2107204329.1499661793; ct=y; __ads_session=VYjlktIF/QigmaAUwgA=; _pk_ref.100001.4cf6=%5B%22%22%2C%22%22%2C1508243796%2C%22https%3A%2F%2Fwww.douban.com%2F%22%5D; _vwo_uuid_v2=59495F45CBFC26B16423CB2090DB073B|acdaf5ce5a21f1a4d8448c6a915622d9; ps=y; dbcl2="151744674:kb9dfkGiL14"; ck=xvQw; _pk_id.100001.4cf6=7711defdeb261e8b.1503127256.15.1508244684.1508205442.; __utma=223695111.1558003340.1503127256.1508205442.1508243796.15; __utmc=223695111; __utmz=223695111.1508164272.13.8.utmcsr=douban.com|utmccn=(referral)|utmcmd=referral|utmcct=/; ap=1; push_noty_num=0; push_doumail_num=0; __utma=30149280.2107204329.1499661793.1508243796.1508326008.38; __utmc=30149280; __utmz=30149280.1508147597.34.23.utmcsr=baidu|utmccn=(organic)|utmcmd=organic; __utmv=30149280.15174'
+cookie = open('cookie.txt').read()
 
 str_to_point = {u'力荐': 5, u'推荐': 4, u'还行': 3, u'较差': 2, u'很差': 1}
 
