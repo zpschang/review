@@ -6,12 +6,17 @@ import os
 import matplotlib.pyplot as plt
 import pickle
 from tensorflow.python.client import device_lib
+from tensorflow.python import debug
 import sys
+import time
 
 model_dir = sys.argv[1]
 assert os.path.isdir(model_dir)
 
 def main():
+    # tensorboard
+    writer = tf.summary.FileWriter('/tmp/tensorboard_zps/aspect-lm')
+
     batch_size = 20
     try:
         file_plot = open('plot.obj', 'rb')
@@ -39,6 +44,8 @@ def main():
 
     print '=========load environment========='
     sess = tf.Session()
+    # sess = debug.LocalCLIDebugWrapperSession(sess)
+
     saver = tf.train.Saver(tf.global_variables(), keep_checkpoint_every_n_hours=1.0)
     try:
         loader = tf.train.import_meta_graph(model_dir + '/aspect-lm.ckpt.meta')
@@ -49,14 +56,21 @@ def main():
         data_to_plot[model_dir] = []
         print 'load failed'
 
+    writer.add_graph(sess.graph)
+
     print '=========start training========='
     print data_to_plot
 
     try:
         for iteration in range(10000000):
-            perplexity = model.update(sess, reader)
+            start_time = time.time()
+            summaries = model.update(sess, reader)
+            global_step = sess.run(model.global_step)
+            print 'global_step:', global_step
+            writer.add_summary(summaries, global_step=global_step)
             print 'progress:', iteration * model.batch_size, '/', 620840
-            data_to_plot[model_dir].append(perplexity)
+            # data_to_plot[model_dir].append(perplexity)
+            print 'batch training time:', time.time() - start_time, 's'
             if iteration % 10000 == 0:
                 saver.save(sess, model_dir + '/aspect-lm.ckpt')
                 plot(data_to_plot)

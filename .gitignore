@@ -1,7 +1,8 @@
+.DS_Store
 dataset/
 model*/
 graph/
-result/
+result*/
 *.png
 *.sh
 *.pyc

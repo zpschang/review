@@ -1,25 +1,25 @@
 import tensorflow as tf
 import os
-from reader import Simple_reader
-from model_aspect import Aspect_LM_Model
+from reader import Reader
+from model import Affect_LM_Model
 from tensorflow.python.client import device_lib
 import sys
 
+
+model_dir = 'model_affect_context'
+
 def main():
-    model_dir = 'model_aspect_new'
+    strength = eval(sys.argv[1])
     os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-    os.environ['CUDA_VISIBLE_DEVICES'] = '3'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '2'
     print device_lib.list_local_devices()
 
     word_filename = 'dataset/words.txt'
-    review_filename = 'dataset/aspect_test.txt'
-    reader = Simple_reader(word_filename, review_filename)
-
-    print len(reader.reviews)
-    batch_size = len(reader.reviews)
+    reader = Reader(word_filename)
+    batch_size = 40
 
     print '=========initialize model========='
-    model = Aspect_LM_Model(vocab_size=len(reader.words), batch_size=batch_size)
+    model = Affect_LM_Model(vocab_size=len(reader.words), feature_size=len(reader.category)+5)
 
     print '=========load environment========='
 
@@ -28,15 +28,18 @@ def main():
     sess = tf.Session(config=tf_config)
     saver = tf.train.Saver(tf.global_variables(), keep_checkpoint_every_n_hours=1.0)
     try:
-        loader = tf.train.import_meta_graph(model_dir + '/aspect-lm.ckpt.meta')
+        loader = tf.train.import_meta_graph(model_dir + '/affect-lm.ckpt.meta')
         loader.restore(sess, tf.train.latest_checkpoint(model_dir + '/'))
         print 'load finished'
     except:
         print 'load failed'
         return
 
-    model.inference(sess, 3, reader)
-    model.train_state(sess, 3, reader)
+    review_filename = 'dataset/evaluate/test.json'
+    reader.set_review(review_filename)
+    batch_size = len(reader.object[review_filename])
+    model.batch_size = batch_size
+    result_infer = model.inference(sess, strength, prefix_size=5, fixed_feature=[[1,1,0,0,0,0,0,0,0,0,1]] * batch_size, reader=reader)
 
 if __name__ == '__main__':
     main()

@@ -21,6 +21,7 @@ class Aspect_LM_Model():
                 lstm_size = 200,
                 num_layer = 4,
                 max_length = 15,
+                prefix_length = 3,
                 max_gradient_norm = 2,
                 batch_size = 20,
                 learning_rate = 0.001,
@@ -30,14 +31,17 @@ class Aspect_LM_Model():
         print 'building model'
 
         self.batch_size = batch_size
+        self.prefix_length = prefix_length
         self.max_length = max_length
 
         rating_embedsize = 100
         aspect_embedsize = 100
 
         with tf.variable_scope("Aspect-LM") as scope:
+            self.global_step = tf.Variable(0, name='global_step', trainable=False)
+
             self.ground_truth = tf.placeholder(tf.int32, [None, max_length], "ground_truth")
-            self.target_weight = tf.placeholder(tf.float32, [None, max_length], "target_weight")
+            self.target_weight = tf.placeholder(tf.float32, [None, None], "target_weight")
 
             self.prefix = tf.placeholder(tf.int32, [None, None], "prefix") # for inferring
             self.aspect = tf.placeholder(tf.int32, [None], "aspect")
@@ -46,10 +50,12 @@ class Aspect_LM_Model():
             no_rating = tf.cast(tf.equal(self.rating, -1), tf.int32)
 
             batch_tensor = tf.shape(self.target_weight)[0]
+            prefix_batch_tensor = tf.shape(self.prefix)[0]
             prefix_tensor = tf.shape(self.prefix)[1]
 
-            self.input = tf.concat([tf.ones([batch_size, 1], dtype=tf.int32) * GO_ID, self.ground_truth[:, :-1]],
+            self.input = tf.concat([tf.ones([batch_tensor, 1], dtype=tf.int32) * GO_ID, self.ground_truth[:, :-1]],
                                            axis=1)
+
 
             embedding = tf.get_variable("embedding", [vocab_size, embedding_size], dtype=tf.float32)
             input_embedded = tf.nn.embedding_lookup(embedding, self.input)
@@ -76,8 +82,8 @@ class Aspect_LM_Model():
                     input_tensor = tf.concat([input_tensor, rating_embedded, aspect_embedded], axis=1)
                     output, current_state = cell(input_tensor, current_state)
                     output = core.dense(output, vocab_size)
-                    # TODO: copy output if <eos> occurs
                     outputs_train.append(tf.reshape(output, [batch_tensor, 1, vocab_size]))
+
 
             logits = tf.concat(outputs_train, axis=1, name="final_output")
             self.result = tf.argmax(logits, 2, name="output")
@@ -88,12 +94,15 @@ class Aspect_LM_Model():
             gradients = tf.gradients(self.loss, params)
             gradients, _ = tf.clip_by_global_norm(gradients, max_gradient_norm)
             optimizer = tf.train.AdamOptimizer(learning_rate)
-            self.train = optimizer.apply_gradients(zip(gradients, params))
+            self.train = optimizer.apply_gradients(zip(gradients, params), global_step=self.global_step)
 
             # TODO: can be replaced with tf.while_loop
-            prefix_embedding = tf.nn.embedding_lookup(embedding, self.prefix)
-            rating_embedded_copy = tf.reshape(rating_embedded, [batch_tensor, 1, rating_embedsize]) * tf.ones([batch_tensor, prefix_tensor, rating_embedsize])
-            aspect_embedded_copy = tf.reshape(aspect_embedded, [batch_tensor, 1, aspect_embedsize]) * tf.ones([batch_tensor, prefix_tensor, aspect_embedsize])
+
+            prefix_go = tf.concat([tf.ones([prefix_batch_tensor, 1], dtype=tf.int32) * GO_ID, self.prefix],
+                                   axis=1)
+            prefix_embedding = tf.nn.embedding_lookup(embedding, prefix_go)
+            rating_embedded_copy = tf.reshape(rating_embedded, [batch_tensor, 1, rating_embedsize]) * tf.ones([batch_tensor, prefix_tensor+1, rating_embedsize])
+            aspect_embedded_copy = tf.reshape(aspect_embedded, [batch_tensor, 1, aspect_embedsize]) * tf.ones([batch_tensor, prefix_tensor+1, aspect_embedsize])
             prefix_embedding = tf.concat([prefix_embedding, rating_embedded_copy, aspect_embedded_copy], axis=2)
 
             _, current_state = tf.nn.dynamic_rnn(cell, prefix_embedding, dtype=tf.float32)
@@ -112,7 +121,10 @@ class Aspect_LM_Model():
                     outputs_infer.append(tf.reshape(output_voc, [batch_tensor, 1]))
             self.result_infer = tf.concat(outputs_infer, axis=1, name="output_infer")
 
-            # TODO: one-step inference
+            tf.summary.scalar('perplexity_train', self.perplexity)
+            tf.summary.scalar('loss_train', self.loss)
+            self.summaries = tf.summary.merge_all()
+
         print 'build finished'
 
     def all_params(self):
@@ -128,7 +140,7 @@ class Aspect_LM_Model():
                 total += k
             print 'total:', total
 
-    def process_batch(self, batch, reader):
+    def process_batch(self, batch, reader, max_length):
         feed_truth = []
         feed_weight = []
         feed_rating = []
@@ -137,16 +149,16 @@ class Aspect_LM_Model():
         for comment, rating, aspect in batch:
             feed_rating.append(rating)
             feed_aspect.append(aspect)
-            pad_num = self.max_length - len(comment)
+            pad_num = max_length - len(comment)
             weight = [1.0] * len(comment) + [0.0] * pad_num
             for index in range(len(comment)):
                 if comment[index] == UNK_ID:
                     weight[index] = 0
 
             comment = comment + [PAD_ID] * pad_num
-            if len(comment) > self.max_length:
-                weight = weight[:self.max_length]
-                comment = comment[:self.max_length]
+            if len(comment) > max_length:
+                weight = weight[:max_length]
+                comment = comment[:max_length]
             feed_truth.append(comment)
             feed_weight.append(weight)
 
@@ -158,30 +170,31 @@ class Aspect_LM_Model():
             print 'batch is None!!!'
             reader.reset()
             batch = reader.get_batch(self.batch_size)
-        print 'read finished'
 
         # build feed dict
-        feed_truth, feed_weight, feed_rating, feed_aspect = self.process_batch(batch, reader)
+        feed_truth, feed_weight, feed_rating, feed_aspect = self.process_batch(batch, reader, self.max_length)
         feed_dict = {}
         feed_dict[self.ground_truth] = np.array(feed_truth, dtype=np.int32)
         feed_dict[self.target_weight] = np.array(feed_weight, dtype=np.float32)
         feed_dict[self.rating] = feed_rating
         feed_dict[self.aspect] = feed_aspect
 
-        feed_output = [self.result, self.loss, self.perplexity, self.train]
-        result, loss, perplexity, _ = sess.run(feed_output, feed_dict=feed_dict)
+        feed_output = [self.result, self.loss, self.perplexity, self.summaries, self.train]
+        result, loss, perplexity, summaries, _ = sess.run(feed_output, feed_dict=feed_dict)
 
-        reader.output(result, batch)
+        # reader.output(result, batch)
         print 'perplexity = ' + str(perplexity)
-        return perplexity
+        return summaries
     
     def inference(self, sess, prefix_size, reader, file=None):
+
         batch = reader.get_batch(self.batch_size, prefix_size)
 
-        feed_prefix, feed_weight, feed_rating, feed_aspect = self.process_batch(batch, reader)
+        feed_prefix, feed_weight, feed_rating, feed_aspect = self.process_batch(batch, reader, prefix_size)
+
         feed_dict = {}
-        feed_dict[self.prefix] = feed_prefix
-        feed_dict[self.target_weight] = feed_weight
+        feed_dict[self.prefix] = np.array(feed_prefix, dtype=np.int32)
+        feed_dict[self.target_weight] = np.array(feed_weight, dtype=np.float32)
         feed_dict[self.rating] = feed_rating
         feed_dict[self.aspect] = feed_aspect
 
@@ -191,6 +204,16 @@ class Aspect_LM_Model():
         reader.output(result=[np.concatenate([prefix, infer]) for prefix, infer in zip(result_prefix, result_infer)], file=file)
 
         return result_infer
+
+    def train_state(self, sess, prefix_size, reader):
+        batch = reader.get_batch(self.batch_size, prefix_size)
+
+        feed_truth, feed_weight, feed_rating, feed_aspect = self.process_batch(batch, reader)
+        feed_dict = {}
+        feed_dict[self.prefix] = feed_truth
+        feed_dict[self.target_weight] = feed_weight
+        feed_dict[self.rating] = feed_rating
+        feed_dict[self.aspect] = feed_aspect
 
 if __name__ == "__main__":
     model = Aspect_LM_Model(30000)

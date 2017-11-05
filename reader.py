@@ -37,7 +37,6 @@ class Reader:
         if self.review_filename not in self.index:
             self.index[self.review_filename] = 0
         object_review = self.object[self.review_filename]
-        print 'review num:', len(object_review)
         while len(object) < batch_size:
             str_comment = object_review[self.index[self.review_filename]]
             if self.filter(str_comment):
@@ -90,30 +89,28 @@ class Reader:
             # category_batch[index] = [float(max(related[:, i])) for i in range(len(self.category))]
         return result
 
-    def output(self, result, batch=None):
+    def output(self, result, batch=None, file=None):
         length = len(result) if result is not None else len(batch)
+        string = ''
         for index in range(length):
-            def output(comment):
-                category = self.get_category(comment)
-                for word in comment:
-                    print self.words[word].encode('utf-8'),
+            if batch is not None:
+                string = string + 'truth:\n'
+                for word in batch[index][0]:
+                    string = string + self.words[word] + ' '
                     if word == EOS_ID:
                         break
-                print '\n',
-                '''
-                for index_word in range(len(comment)):
-                    word = comment[index_word]
-                    print self.words[word].encode('utf-8'),
-                    for index_category in range(len(self.category)):
-                        print self.category[index_category], category[index_word][index_category],
-                    print '\n',
-                '''
-            if batch is not None:
-                print 'truth:'
-                output(batch[index][0])
+                string += '\n'
             if result is not None:
-                print 'result:'
-                output(result[index])
+                string = string + 'result:\n'
+                for word in result[index]:
+                    string = string + self.words[word] + ' '
+                    if word == EOS_ID:
+                        break
+                string += '\n'
+        if file is None:
+            print string.encode('utf-8')
+        else:
+            file.write(string.encode('utf-8'))
 
     def reset(self):
         self.index[self.review_filename] = 0
@@ -148,8 +145,10 @@ class Simple_reader():
             line_review = string[index]
             line_score = string[index + 1]
             words = re.split(' ', line_review)
-            if words[-1] == '\n':
-                words = words[:-1]
+
+            if words[-1][-1] == '\n':
+                words[-1] = words[-1][:-1]
+
             review_index = [self.word_to_index[word] if word in self.word_to_index else UNK_ID for word in words]
             review_index += [EOS_ID]
             pair = re.findall('-?[0-9]', line_score)
