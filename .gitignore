@@ -7,4 +7,5 @@ result*/
 *.sh
 *.pyc
 *.obj
+.idea/
 cookie.txt
