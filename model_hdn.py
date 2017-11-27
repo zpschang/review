@@ -12,7 +12,7 @@ EOS_ID = 1
 UNK_ID = 2
 PAD_ID = 3
 
-class HD_model(model):
+class HDN_model(model):
     def __init__(self):
         self.batch_size = hyper.batch_size
         self.prefix_length = hyper.prefix_length

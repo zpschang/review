@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
-class model():
+class model(): # base class for all models
     def __init__(self):
         pass
     def all_params(self):

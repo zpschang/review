@@ -1,4 +1,4 @@
-from reader import Reader, Simple_reader
+from reader import Reader, SimpleReader
 from model_aspect import Aspect_LM_Model
 import tensorflow as tf
 import json
@@ -34,10 +34,10 @@ def main():
     word_filename = 'dataset/words.txt'
     review_filename = 'dataset/aspect_shuffle.txt'
 
-    reader = Simple_reader(word_filename, review_filename)
+    reader = SimpleReader(word_filename, review_filename)
 
     test_filename = 'dataset/aspect_test.txt'
-    reader_test = Simple_reader(word_filename, test_filename)
+    reader_test = SimpleReader(word_filename, test_filename)
 
     print '=========initialize model========='
     model = Aspect_LM_Model(vocab_size=len(reader.words), batch_size=batch_size)

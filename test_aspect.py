@@ -1,6 +1,6 @@
 import tensorflow as tf
 import os
-from reader import Simple_reader
+from reader import SimpleReader
 from model_aspect import Aspect_LM_Model
 from tensorflow.python.client import device_lib
 import sys
@@ -13,7 +13,7 @@ def main():
 
     word_filename = 'dataset/words.txt'
     review_filename = 'dataset/aspect_test.txt'
-    reader = Simple_reader(word_filename, review_filename)
+    reader = SimpleReader(word_filename, review_filename)
 
     print len(reader.reviews)
     batch_size = len(reader.reviews)
@@ -36,7 +36,6 @@ def main():
         return
 
     model.inference(sess, 3, reader)
-    model.train_state(sess, 3, reader)
 
 if __name__ == '__main__':
     main()

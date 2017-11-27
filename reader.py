@@ -152,7 +152,7 @@ class Reader:
             feed_feature.append(category)
         return feed_truth, feed_weight, feed_feature
 
-class Simple_reader():
+class SimpleReader():
     def __init__(self, word_filename, review_filename):
         self.words = []
         self.word_to_index = {}
