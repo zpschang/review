@@ -3,8 +3,10 @@ import jieba
 import re
 from analyze import load_category
 import numpy as np
+GO_ID = 0
 EOS_ID = 1
 UNK_ID = 2
+PAD_ID = 3
 sentiment_length = 3
 
 class reader_amazon:
@@ -26,10 +28,6 @@ class Reader:
         self.index = {}
         self.category, self.word_to_category = load_category()
         print self.category
-
-    def filter(self, comment): # whether this comment is selected
-        # TODO: filter
-        return True
 
     def get_batch(self, batch_size, prefix_size=None):
         batch = []
@@ -123,6 +121,37 @@ class Reader:
             self.object[review_filename] = json.loads(string)
             file.close()
 
+    def process_batch(self, batch, max_length):
+        feed_truth = []
+        feed_weight = []
+        feed_feature = []
+        feature_size = len(self.category)
+        for comment, category, point in batch:
+            pad_num = max_length - len(comment)
+            weight = [1.0] * len(comment) + [0.0] * pad_num
+            for index in range(len(comment)):
+                if comment[index] == UNK_ID:
+                    weight[index] = 0
+
+            category = category + [[0.0] * feature_size for _ in range(pad_num)]
+
+            # add point
+            point_vector = [1 if index == point-1 else 0 for index in range(5)]
+            for index in range(len(category)):
+                if type(category[index]) is np.ndarray:
+                    category[index] = category[index].tolist() + point_vector
+                else:
+                    category[index] = category[index] + point_vector
+            comment = comment + [PAD_ID] * pad_num
+            if len(comment) > max_length:
+                weight = weight[:max_length]
+                category = category[:max_length]
+                comment = comment[:max_length]
+            feed_truth.append(comment)
+            feed_weight.append(weight)
+            feed_feature.append(category)
+        return feed_truth, feed_weight, feed_feature
+
 class Simple_reader():
     def __init__(self, word_filename, review_filename):
         self.words = []
@@ -200,3 +229,27 @@ class Simple_reader():
             print string
         else:
             file.write(string)
+
+    def process_batch(self, batch, max_length):
+        feed_truth = []
+        feed_weight = []
+        feed_rating = []
+        feed_aspect = []
+
+        for comment, rating, aspect in batch:
+            feed_rating.append(rating)
+            feed_aspect.append(aspect)
+            pad_num = max_length - len(comment)
+            weight = [1.0] * len(comment) + [0.0] * pad_num
+            for index in range(len(comment)):
+                if comment[index] == UNK_ID:
+                    weight[index] = 0
+
+            comment = comment + [PAD_ID] * pad_num
+            if len(comment) > max_length:
+                weight = weight[:max_length]
+                comment = comment[:max_length]
+            feed_truth.append(comment)
+            feed_weight.append(weight)
+
+        return feed_truth, feed_weight, feed_rating, feed_aspect

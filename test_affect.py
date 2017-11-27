@@ -1,7 +1,7 @@
 import tensorflow as tf
 import os
 from reader import Reader
-from model import Affect_LM_Model
+from model_affect import Affect_LM_Model
 from tensorflow.python.client import device_lib
 import sys
 

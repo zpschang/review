@@ -1,5 +1,5 @@
 from reader import Reader
-from model import Affect_LM_Model
+from model_affect import Affect_LM_Model
 import tensorflow as tf
 import json
 import os
