@@ -8,8 +8,8 @@ class HyperParameter():
         self.lstm_size = 200
         self.num_layer = 4
         self.num_type = 3
-        self.num_rating = 5
-        self.num_aspect = 5
+        self.num_rating = 6
+        self.num_aspect = 6
         self.max_length = 15
         self.prefix_length = 3
         self.max_gradient_norm = 2

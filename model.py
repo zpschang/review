@@ -26,6 +26,7 @@ class model(): # base class for all models
         feed_dict[self.target_weight] = feed_weight
         feed_dict[self.rating] = feed_rating
         feed_dict[self.aspect] = feed_aspect
+        feed_dict[self.is_infer] = False
 
         feed_output = [self.result, self.loss, self.perplexity, self.summaries, self.train]
         result, loss, perplexity, summaries, _ = sess.run(feed_output, feed_dict=feed_dict)
@@ -42,8 +43,9 @@ class model(): # base class for all models
         feed_dict[self.target_weight] = np.array(feed_weight, dtype=np.float32)
         feed_dict[self.rating] = feed_rating
         feed_dict[self.aspect] = feed_aspect
+        feed_dict[self.is_infer] = True
 
-        result_infer = sess.run(self.result_infer, feed_dict=feed_dict)
+        result = sess.run(self.result, feed_dict=feed_dict)
 
-        reader.output(result=result_infer, file=file)
-        return result_infer
+        result = result[:, self.prefix_length:]
+        reader.output(batch=batch, result=result, file=file)

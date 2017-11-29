@@ -17,8 +17,6 @@ PAD_ID = 3
 class Aspect_LM_Model(model):
     def __init__(self):
         # TODO: unify training and testing inputs.
-        print 'building model'
-
         self.batch_size = hyper.batch_size
         self.prefix_length = hyper.prefix_length
         self.max_length = hyper.max_length
@@ -112,8 +110,6 @@ class Aspect_LM_Model(model):
             tf.summary.scalar('perplexity_train', self.perplexity)
             tf.summary.scalar('loss_train', self.loss)
             self.summaries = tf.summary.merge_all()
-
-        print 'build finished'
 
     def update(self, sess, reader):
         batch = reader.get_batch(self.batch_size)

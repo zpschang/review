@@ -35,7 +35,7 @@ class HD_model(model):
             batch_tensor = tf.shape(self.ground_truth)[0]
             length_tensor = tf.shape(self.ground_truth)[1]
 
-            self.input = tf.concat([tf.ones([batch_tensor, 1], dtype=tf.int32) * GO_ID, self.ground_truth[:, :-1]],
+            self.input = tf.concat([tf.ones([batch_tensor, 1], dtype=tf.int32) * GO_ID, self.ground_truth],
                                    axis=1)
             rating = self.rating + no_rating
             aspect = self.aspect + 2
@@ -72,8 +72,8 @@ class HD_model(model):
 
                     result_index = tf.argmax(result, axis=1)
                     refer_input_tensor = tf.nn.embedding_lookup(embedding, result_index)
-                    train_input_tensor = input_embedded[:, time_step, :]
-                    input_tensor = tf.cond(tf.logical_and(self.is_infer, time_step + 1 >= length_tensor),
+                    train_input_tensor = input_embedded[:, tf.minimum(time_step, length_tensor), :]
+                    input_tensor = tf.cond(tf.logical_and(self.is_infer, time_step > length_tensor),
                                            lambda: refer_input_tensor, lambda: train_input_tensor)
                     rnn_output, current_state = cell(input_tensor, current_state)
                     # rnn_output: batch * lstm_size

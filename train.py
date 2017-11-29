@@ -12,18 +12,15 @@ import time
 word_filename = 'dataset/words.txt'
 review_filename = 'dataset/aspect_shuffle.txt'
 test_filename = 'dataset/aspect_test.txt'
-summary_dir = '/tmp/tensorboard_zps/affect-lm'
 
 def main():
-    # tensorboard
-    writer = tf.summary.FileWriter(summary_dir)
     os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
     os.environ['CUDA_VISIBLE_DEVICES'] = '3'
-    print device_lib.list_local_devices()
+    # print device_lib.list_local_devices()
 
     # building reader
-    reader = SimpleReader(word_filename, review_filename)
-    reader_test = SimpleReader(word_filename, test_filename)
+    reader = SimpleReader(word_filename, review_filename, is_train=True)
+    reader_test = SimpleReader(word_filename, test_filename, is_train=False)
     hyper.vocab_size = len(reader.words)
 
     # building model
@@ -32,14 +29,18 @@ def main():
     name_to_class = {name: class_ for name, class_ in zip(model_name, model_class)}
     print 'trainable models:'
     print ' '.join(model_name)
-    input_str = raw_input()
+    input_str = raw_input('model:')
     if input_str not in model_name:
         print 'wrong model name'
         return
+    print 'building model'
     model = name_to_class[input_str]()
+    print 'build finished'
 
     # load environment
-    model_dir = 'model_' + input_str
+    model_dir = 'model/' + input_str
+    if not os.path.isdir(model_dir):
+        os.mkdir(model_dir)
 
     sess = tf.Session()
     saver = tf.train.Saver(tf.global_variables(), keep_checkpoint_every_n_hours=1.0)
@@ -50,10 +51,19 @@ def main():
     except:
         sess.run(tf.global_variables_initializer())
         print 'load failed'
-    writer.add_graph(sess.graph)
+
 
     # start training
-    result_dir = 'result_' + input_str
+    result_dir = 'result/' + input_str
+    if not os.path.isdir(result_dir):
+        os.mkdir(result_dir)
+    summary_dir = '/tmp/tensorboard_zps/' + input_str
+    if not os.path.isdir(summary_dir):
+        os.mkdir(summary_dir)
+    # tensorboard
+    writer = tf.summary.FileWriter(summary_dir)
+    writer.add_graph(sess.graph)
+
     try:
         for iteration in range(10000000):
             start_time = time.time()
@@ -61,14 +71,14 @@ def main():
             global_step = sess.run(model.global_step)
             print 'global_step:', global_step
             writer.add_summary(summaries, global_step=global_step)
-            print 'progress:', iteration * model.batch_size, '/', 620840
+            print 'progress:', reader.index, '/', len(reader.reviews)
             # data_to_plot[model_dir].append(perplexity)
             print 'batch training time:', time.time() - start_time, 's'
             if iteration % 10000 == 0:
                 saver.save(sess, model_dir + '/model.ckpt')
                 file = open(result_dir + '/result_' + str(iteration) + '.txt', 'w')
                 model.batch_size = len(reader_test.reviews)
-                model.inference(sess, prefix_size=3, reader=reader_test, file=file)
+                model.inference(sess, reader=reader_test, file=file)
                 file.close()
                 model.batch_size = hyper.batch_size
 
@@ -79,3 +89,6 @@ def main():
     saver.save(sess, model_dir + '/model.ckpt')
     file_plot = open('plot.obj', 'wb')
     file_plot.close()
+
+if __name__ == '__main__':
+    main()

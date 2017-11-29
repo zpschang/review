@@ -153,7 +153,8 @@ class Reader:
         return feed_truth, feed_weight, feed_feature
 
 class SimpleReader():
-    def __init__(self, word_filename, review_filename):
+    def __init__(self, word_filename, review_filename, is_train=False):
+        self.is_train = is_train
         self.words = []
         self.word_to_index = {}
         for word in open(word_filename, 'rb').readlines():
@@ -181,20 +182,25 @@ class SimpleReader():
             review_index = [self.word_to_index[word] if word in self.word_to_index else UNK_ID for word in words]
             review_index += [EOS_ID]
             pair = re.findall('-?[0-9]', line_score)
-
             aspect = eval(pair[0])
             rating = eval(pair[1])
+
+            if self.is_train and self.filter(review_index):
+                continue
             self.reviews.append(review_index)
             self.aspect.append(aspect)
             self.rating.append(rating)
 
         print 'finish processing data'
         self.index = 0
+
+    def filter(self, review):
+        # TODO: enhance filter
+        return len(review) < 5 or len(review) > 15
+
     def get_batch(self, batch_size, prefix_size=None):
         batch = []
         for _ in range(batch_size):
-            if self.index == len(self.reviews):
-                self.index = 0
             if prefix_size is None:
                 reviews = self.reviews[self.index]
             else:
@@ -204,6 +210,8 @@ class SimpleReader():
             batch.append((reviews, rating, aspect))
 
             self.index += 1
+            if self.index == len(self.reviews):
+                self.index = 0
 
         return batch
 
@@ -211,15 +219,16 @@ class SimpleReader():
         length = len(result) if result is not None else len(batch)
         string = ''
         for index in range(length):
+            string += 'rating: %d, aspect: %d\n' % (batch[index][1], batch[index][2])
             if batch is not None:
-                string = string + 'truth:\n'
+                string = string + 'truth: '
                 for word in batch[index][0]:
                     string = string + self.words[word] + ' '
                     if word == EOS_ID:
                         break
                 string += '\n'
             if result is not None:
-                string = string + 'result:\n'
+                string = string + 'result: '
                 for word in result[index]:
                     string = string + self.words[word] + ' '
                     if word == EOS_ID:
