@@ -24,7 +24,7 @@ def main():
     hyper.vocab_size = len(reader.words)
 
     # building model
-    model_name = ['affect', 'aspect', 'hd', 'hdn']
+    model_name = ['affect', 'aspect', 'hd', 'hdn', 'affect']
     model_class = [Affect_LM_Model, Aspect_LM_Model, HD_model, HDN_model]
     name_to_class = {name: class_ for name, class_ in zip(model_name, model_class)}
     print 'trainable models:'

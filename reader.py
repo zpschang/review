@@ -1,5 +1,6 @@
 import json
 import jieba
+import jieba.posseg
 import re
 from analyze import load_category
 import numpy as np
@@ -20,6 +21,7 @@ class Reader:
     def __init__(self, word_filename):
         self.words = []
         self.word_to_index = {}
+        self.word_to_flag = {}
         for word in open(word_filename, 'rb').readlines():
             word = word.decode('utf-8')[:-1]
             self.word_to_index[word] = len(self.words)
@@ -38,7 +40,7 @@ class Reader:
         while len(object) < batch_size:
             str_comment = object_review[self.index[self.review_filename]]
             if self.filter(str_comment):
-                object.append(object_review[self.index[self.review_filename]])
+                object.append(str_comment)
             self.index[self.review_filename] += 1
             self.index[self.review_filename] %= len(object_review)
 
@@ -50,6 +52,7 @@ class Reader:
             for word in words_raw:
                 if word not in {' ', '\n'}:
                     words.append(word)
+
 
             int_comment = [self.word_to_index[word] if word in self.word_to_index else UNK_ID for word in words]
             int_comment = int_comment + [EOS_ID]
@@ -157,10 +160,18 @@ class SimpleReader():
         self.is_train = is_train
         self.words = []
         self.word_to_index = {}
-        for word in open(word_filename, 'rb').readlines():
-            word = word[:-1]
+        self.types = []
+        self.type_to_index = {}
+        self.word_to_type = {}
+        for line in open(word_filename, 'rb').readlines():
+            word, type = line.split(' ')
+            type = type[:-1]
             self.word_to_index[word] = len(self.words)
             self.words.append(word)
+            if not type in self.type_to_index:
+                self.type_to_index[type] = len(self.types)
+                self.types.append(type)
+            self.word_to_type[word] = type
 
         self.object = {}
         self.index = {}
@@ -185,7 +196,7 @@ class SimpleReader():
             aspect = eval(pair[0])
             rating = eval(pair[1])
 
-            if self.is_train and self.filter(review_index):
+            if self.is_train and self.filter(review_index, aspect, rating):
                 continue
             self.reviews.append(review_index)
             self.aspect.append(aspect)
@@ -194,9 +205,9 @@ class SimpleReader():
         print 'finish processing data'
         self.index = 0
 
-    def filter(self, review):
+    def filter(self, review, aspect, rating):
         # TODO: enhance filter
-        return len(review) < 5 or len(review) > 15
+        return len(review) < 5 or len(review) > 15 or aspect == -1 or aspect == -2
 
     def get_batch(self, batch_size, prefix_size=None):
         batch = []
@@ -262,3 +273,11 @@ class SimpleReader():
             feed_weight.append(weight)
 
         return feed_truth, feed_weight, feed_rating, feed_aspect
+
+if __name__ == '__main__':
+    word_filename = 'dataset/words.txt'
+    review_filename = 'dataset/aspect_shuffle.txt'
+    test_filename = 'dataset/aspect_test.txt'
+    reader = SimpleReader(word_filename, review_filename)
+    for type in reader.types:
+        print type

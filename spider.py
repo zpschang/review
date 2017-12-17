@@ -23,6 +23,7 @@ list_urls = ['https://movie.douban.com/j/search_subjects?type=movie&tag=%E5%8F%A
                     ]
 
 def get_movies():
+    all_ids = set()
     obj_movies = []
     for tag in tags:
         print 'tag:', tag
@@ -32,7 +33,7 @@ def get_movies():
                 list_url = 'https://movie.douban.com/j/search_subjects?type=movie&tag=' + tag + '&sort=recommend&page_limit=20&page_start='
                 list_url += str(num)
                 print 'url is:', list_url
-                proxy = urllib2.ProxyHandler({'https': 'https://127.0.0.1:38251'})
+                proxy = urllib2.ProxyHandler({'https': 'https://127.0.0.1:52380'})
                 opener = urllib2.build_opener(proxy)
                 urllib2.install_opener(opener)
                 req = urllib2.Request(list_url)
@@ -44,7 +45,10 @@ def get_movies():
                 if len(js['subjects']) == 0:
                     break
                 for json_obj in js['subjects']:
-                    obj_movies.append(json_obj)
+                    id = json_obj['id']
+                    if id not in all_ids:
+                        obj_movies.append(json_obj)
+                        all_ids.add(id)
                 time.sleep(0.1)
 
             except Exception:
@@ -58,13 +62,10 @@ def get_movies():
     return obj_movies
 
 def get_comment():
-    global program_id
     obj_movies = get_movies()
     movie_num = 0
     for obj in obj_movies:
         movie_num += 1
-        if movie_num % 3 != program_id:
-            continue
         movie_id = obj['id']
         movie_url = obj['url']
         movie_title = obj['title']
@@ -83,7 +84,7 @@ def get_comment():
             try:
                 comments_url = movie_url + 'comments?start=' + str(num) + '&limit=20&sort=new_score&status=P'
                 print comments_url
-                proxy = urllib2.ProxyHandler({'https': 'https://127.0.0.1:38251'})
+                proxy = urllib2.ProxyHandler({'https': 'https://127.0.0.1:52380'})
                 opener = urllib2.build_opener(proxy)
                 urllib2.install_opener(opener)
                 req = urllib2.Request(comments_url)
@@ -91,7 +92,7 @@ def get_comment():
                 resp = urllib2.urlopen(req).read()
 
                 soup = BeautifulSoup(resp, 'html5lib')
-            except None:
+            except:
                 print 'num:', num
                 print 'connection fail.'
                 num -= 20
@@ -145,7 +146,7 @@ def get_info():
 
 
 if __name__ == '__main__':
-    global program_id
-    program_id = eval(sys.argv[1])
-    print 'program_id:', program_id
+    # global program_id
+    # program_id = eval(sys.argv[1])
+    # print 'program_id:', program_id
     get_comment()

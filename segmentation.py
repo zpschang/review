@@ -1,4 +1,5 @@
 import jieba
+import jieba.posseg
 import json
 import matplotlib.pyplot as plt
 import sys
@@ -6,9 +7,17 @@ import re
 # word segmentation & vocabulary generation
 # run this program before training to generate vocabulary
 
+# a, ag, an, ad: adjective(affect)
+# c, p: conjunction, preposition(relation)
+# n, nr, ns, nt, nz, nrfg: noun(aspect)
+# r: pronoun(???)
+# u* : auxiliary
+
+# eng, m
+
 def get_all_words():
     words = {}
-    string = open('dataset/douban/movie_list.json', 'r').read()
+    string = open('dataset/douban/movie_list.json', 'rb').read()
     num = 0
     objects = json.loads(string)
     for obj in objects:
@@ -18,9 +27,10 @@ def get_all_words():
         print 'word len:', len(words)
         filename = 'dataset/douban/comments/' + movie_id + '.json'
         try:
-            string_comments = open(filename, 'r').read()
+            string_comments = open(filename, 'rb').read()
         except:
-            break
+            num += 1
+            continue
         object_comments = json.loads(string_comments)
         for comment in object_comments:
             string_comment = comment[u'comment_str']
@@ -30,6 +40,7 @@ def get_all_words():
                 else:
                     words[word] += 1
         num += 1
+
     return words
 
 def plot_dataset():
@@ -91,9 +102,14 @@ def generate_word():
     total_sum = 0
     validate_sum = 0
     file_word = open('dataset/words.txt', 'wb')
-    file_word.write('<go>\n<eos>\n<unk>\n<pad>\n')
+    def write(word, type):
+        file_word.write('%s %s\n' % (word, type))
+    write('<go>', 'special')
+    write('<eos>', 'special')
+    write('<unk>', 'special')
+    write('<pad>', 'special')
     for key, value in sorted(words.items(), key=lambda x: x[1], reverse=True):
-        if key == ' ':
+        if key in {' ', '\n'}:
             continue
         total_sum += value
         if value < 15:
@@ -102,7 +118,8 @@ def generate_word():
         num += 1
         if num < 500:
             print key.encode('utf-8'),
-        file_word.write(key.encode('utf-8') + '\n')
+        result = list(jieba.posseg.cut(key))
+        write(key.encode('utf-8'), result[0].flag.encode('utf-8'))
 
     print num
     print 1.0 * validate_sum / total_sum
@@ -117,3 +134,6 @@ if __name__ == '__main__':
     elif sys.argv[1] == 'length':
         print 'plot length'
         plot_length()
+    else:
+        words, tags = get_all_words()
+        print tags
